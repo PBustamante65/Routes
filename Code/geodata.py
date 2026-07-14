@@ -1,9 +1,14 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
+from sklearn.metrics.pairwise import haversine_distances
+import numpy as np
+
+EARTH_RADIUS = 6371
+
 
 df = pd.read_excel(
-    "/Users/patrickbustamante/Library/Mobile Documents/com~apple~CloudDocs/Random/Routes/Data/RutaEditado_coordenadas.xlsx"
+    "/Users/patrickbustamante/Library/Mobile Documents/com~apple~CloudDocs/Random/Routes/Data/RutaEditado_coordenadas2.xlsx"
 )
 
 
@@ -35,4 +40,9 @@ def carto(lons, lats):
 lats = df["latitud"].to_numpy()
 lons = df["longitud"].to_numpy()
 
-carto(lons, lats)
+coords_rad = np.radians(np.column_stack([lats, lons]))
+dist_matrix = haversine_distances(coords_rad) * EARTH_RADIUS
+
+dist_df = pd.DataFrame(dist_matrix, index=df["tienda"], columns=df["tienda"])
+
+print(dist_df)
