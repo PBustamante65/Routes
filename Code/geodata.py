@@ -33,12 +33,10 @@ def carto(lons, lats):
     plt.show()
 
 
-lats = df["latitud"].to_numpy()
-lons = df["longitud"].to_numpy()
+# lats = df["latitud"].to_numpy()
+# lons = df["longitud"].to_numpy()
 
-coords_rad = np.radians(np.column_stack([lats, lons]))
-dist_matrix = haversine_distances(coords_rad) * EARTH_RADIUS
+# coords_rad = np.radians(np.column_stack([lats, lons]))
+# dist_matrix = haversine_distances(coords_rad) * EARTH_RADIUS
 
-dist_df = pd.DataFrame(dist_matrix, index=df["tienda"], columns=df["tienda"])
-
-print(dist_df)
+# dist_df = pd.DataFrame(dist_matrix, index=df["tienda"], columns=df["tienda"])
