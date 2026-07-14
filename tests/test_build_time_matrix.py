@@ -73,7 +73,7 @@ def test_batch_size_stays_under_osrm_table_size_cap():
     assert btm.BATCH_SIZE * len(points) <= 10000
 
 
-def test_build_duration_matrix_places_batches_in_correct_cells(monkeypatch):
+def test_build_matrices_places_batches_in_correct_cells(monkeypatch):
     import pandas as pd
 
     points = pd.DataFrame(
@@ -86,19 +86,47 @@ def test_build_duration_matrix_places_batches_in_correct_cells(monkeypatch):
         }
     )
 
-    fake_responses = {
+    fake_durations = {
         (0, 2): [[0, 10, 20], [10, 0, 30]],
         (2, 3): [[20, 30, 0]],
+    }
+    fake_distances = {
+        (0, 2): [[0, 100, 200], [100, 0, 300]],
+        (2, 3): [[200, 300, 0]],
     }
 
     def fake_fetch(coords_param, source_indices, all_indices):
         key = (source_indices.start, source_indices.stop)
-        return fake_responses[key]
+        return fake_durations[key], fake_distances[key]
 
     monkeypatch.setattr(btm, "BATCH_SIZE", 2)
     monkeypatch.setattr(btm, "REQUEST_DELAY_SECONDS", 0)
-    with patch.object(btm, "fetch_duration_batch", side_effect=fake_fetch):
-        matrix = btm.build_duration_matrix(points)
+    with patch.object(btm, "fetch_matrix_batch", side_effect=fake_fetch):
+        durations_matrix, distances_matrix = btm.build_matrices(points)
 
-    expected = np.array([[0, 10, 20], [10, 0, 30], [20, 30, 0]])
-    assert np.array_equal(matrix, expected)
+    expected_durations = np.array([[0, 10, 20], [10, 0, 30], [20, 30, 0]])
+    expected_distances = np.array([[0, 100, 200], [100, 0, 300], [200, 300, 0]])
+    assert np.array_equal(durations_matrix, expected_durations)
+    assert np.array_equal(distances_matrix, expected_distances)
+
+
+def test_fetch_matrix_batch_returns_durations_and_distances():
+    fake_json = {
+        "code": "Ok",
+        "durations": [[0, 5]],
+        "distances": [[0, 50]],
+    }
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return fake_json
+
+    with patch.object(btm.requests, "get", return_value=FakeResponse()) as mock_get:
+        durations, distances = btm.fetch_matrix_batch("c", range(0, 1), range(0, 2))
+
+    assert durations == [[0, 5]]
+    assert distances == [[0, 50]]
+    assert mock_get.call_args.kwargs["params"]["annotations"] == "duration,distance"
