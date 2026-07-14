@@ -14,27 +14,26 @@ Usage:
 import argparse
 import math
 
-import numpy as np
-import pandas as pd
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
-POINTS_INDEX_SRC = "Data/points-index.csv"
-TIME_MATRIX_SRC = "Data/time-matrix-seconds.csv"
-DISTANCE_MATRIX_SRC = "Data/distance-matrix-meters.csv"
-SOLUTION_DST = "Data/routes-solution.csv"
+from vrp_common import (
+    DEPOT_ROW,
+    DUMP_SERVICE_SECONDS,
+    LANDFILL_ROW,
+    NUM_TRUCKS,
+    SHIFT_CAP_SECONDS,
+    STOP_DEMAND_CBM,
+    STOP_SERVICE_SECONDS,
+    TRUCK_CAPACITY_CBM,
+    load_data,
+    report_solution,
+    summarize_route,
+)
 
-NUM_TRUCKS = 10
-TRUCK_CAPACITY_CBM = 8.0
-STOP_DEMAND_CBM = 0.9
-STOP_SERVICE_SECONDS = 180
-DUMP_SERVICE_SECONDS = 900
-SHIFT_CAP_SECONDS = 8 * 3600
+SOLUTION_DST = "Data/routes-solution.csv"
 
 # Demands are scaled to integer tenths of a cbm (OR-Tools needs integers).
 DEMAND_SCALE = 10
-
-DEPOT_ROW = 0
-LANDFILL_ROW = 1
 
 
 def num_landfill_copies(num_stops, num_trucks, capacity_cbm=TRUCK_CAPACITY_CBM):
@@ -148,46 +147,6 @@ def solve(
     return routes
 
 
-def summarize_route(rows, time_matrix, distance_matrix):
-    """Walks one route (matrix rows, depot excluded) and returns totals
-    plus per-visit arrival time and load."""
-    visits = []
-    load_cbm = 0.0
-    clock = 0
-    distance = 0.0
-    prev = DEPOT_ROW
-    stops = 0
-    dumps = 0
-
-    for row in rows:
-        clock += int(time_matrix[prev][row])
-        distance += distance_matrix[prev][row]
-        if row == LANDFILL_ROW:
-            dumps += 1
-            load_cbm = 0.0
-            service = DUMP_SERVICE_SECONDS
-        else:
-            stops += 1
-            load_cbm += STOP_DEMAND_CBM
-            service = STOP_SERVICE_SECONDS
-        visits.append(
-            {"row": row, "arrival_seconds": clock, "load_after_cbm": round(load_cbm, 1)}
-        )
-        clock += service
-        prev = row
-
-    clock += int(time_matrix[prev][DEPOT_ROW]) if rows else 0
-    distance += distance_matrix[prev][DEPOT_ROW] if rows else 0.0
-
-    return {
-        "visits": visits,
-        "stops": stops,
-        "dumps": dumps,
-        "total_seconds": clock,
-        "total_meters": distance,
-    }
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -195,53 +154,13 @@ def main():
     )
     args = parser.parse_args()
 
-    points = pd.read_csv(POINTS_INDEX_SRC)
-    time_matrix = pd.read_csv(TIME_MATRIX_SRC, index_col=0).to_numpy()
-    distance_matrix = pd.read_csv(DISTANCE_MATRIX_SRC, index_col=0).to_numpy()
-
-    num_stops = len(points) - 2
+    points, time_matrix, distance_matrix, num_stops = load_data()
     print(
         f"Resolviendo: {num_stops} paradas, {NUM_TRUCKS} camiones, limite {args.time_limit}s..."
     )
 
     routes = solve(time_matrix, num_stops, NUM_TRUCKS, args.time_limit)
-
-    records = []
-    total_seconds = 0
-    total_meters = 0.0
-    total_dumps = 0
-    for truck, rows in enumerate(routes):
-        summary = summarize_route(rows, time_matrix, distance_matrix)
-        total_seconds += summary["total_seconds"]
-        total_meters += summary["total_meters"]
-        total_dumps += summary["dumps"]
-        for seq, visit in enumerate(summary["visits"]):
-            point = points.iloc[visit["row"]]
-            records.append(
-                {
-                    "truck": truck,
-                    "seq": seq,
-                    "id": point["id"],
-                    "tienda": point["tienda"],
-                    "tipo": point["tipo"],
-                    "arrival_seconds": visit["arrival_seconds"],
-                    "load_after_cbm": visit["load_after_cbm"],
-                    "meters": distance_matrix[visit["row"]][DEPOT_ROW],
-                }
-            )
-        hours, rem = divmod(summary["total_seconds"], 3600)
-        print(
-            f"Camion {truck}: {summary['stops']} paradas, {summary['dumps']} viajes al relleno, "
-            f"{hours}h{rem // 60:02d}m, {summary['total_meters'] / 1000:.1f} km"
-        )
-
-    pd.DataFrame(records).to_csv(SOLUTION_DST, index=False)
-    hours, rem = divmod(total_seconds, 3600)
-    print(
-        f"\nTotal: {hours}h{rem // 60:02d}m, {total_meters / 1000:.1f} km, "
-        f"{total_dumps} viajes al relleno"
-    )
-    print(f"Solucion guardada en: {SOLUTION_DST}")
+    report_solution(routes, points, time_matrix, distance_matrix, SOLUTION_DST)
 
 
 if __name__ == "__main__":
