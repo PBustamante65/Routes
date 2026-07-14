@@ -1,6 +1,6 @@
 """
-Builds a full pairwise travel-time matrix (depot + landfill + Oxxo stops)
-using OSM's OSRM public routing API (/table service).
+Builds full pairwise travel-time and distance matrices (depot + landfill +
+Oxxo stops) using OSM's OSRM public routing API (/table service).
 
 Usage:
     python3 build_time_matrix.py
@@ -14,7 +14,8 @@ import requests
 
 LANDFILL_AND_DEPOT_SRC = "Data/landfill-and-depot.csv"
 OXXO_STOPS_SRC = "Data/oxxo-stops.csv"
-MATRIX_DST = "Data/time-matrix-seconds.csv"
+TIME_MATRIX_DST = "Data/time-matrix-seconds.csv"
+DISTANCE_MATRIX_DST = "Data/distance-matrix-meters.csv"
 POINTS_INDEX_DST = "Data/points-index.csv"
 
 OSRM_TABLE_URL = "https://router.project-osrm.org/table/v1/driving/{coords}"
@@ -64,14 +65,14 @@ def chunk_indices(n, batch_size):
         yield start, min(start + batch_size, n)
 
 
-def fetch_duration_batch(coords_param, source_indices, all_indices):
+def fetch_matrix_batch(coords_param, source_indices, all_indices):
     sources = ";".join(str(i) for i in source_indices)
     destinations = ";".join(str(i) for i in all_indices)
     url = OSRM_TABLE_URL.format(coords=coords_param)
     params = {
         "sources": sources,
         "destinations": destinations,
-        "annotations": "duration",
+        "annotations": "duration,distance",
     }
 
     last_error = None
@@ -79,7 +80,8 @@ def fetch_duration_batch(coords_param, source_indices, all_indices):
         try:
             response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()
-            return response.json()["durations"]
+            body = response.json()
+            return body["durations"], body["distances"]
         except (requests.RequestException, KeyError, ValueError) as exc:
             last_error = exc
             print(f"Intento {attempt}/{MAX_RETRIES} fallido: {exc}")
@@ -87,32 +89,37 @@ def fetch_duration_batch(coords_param, source_indices, all_indices):
     raise RuntimeError(f"No se pudo obtener el batch tras {MAX_RETRIES} intentos: {last_error}")
 
 
-def build_duration_matrix(points):
+def build_matrices(points):
     n = len(points)
     coords_param = ";".join(f"{lon},{lat}" for lat, lon in zip(points["latitud"], points["longitud"]))
     all_indices = range(n)
 
-    matrix = np.full((n, n), np.nan)
+    durations_matrix = np.full((n, n), np.nan)
+    distances_matrix = np.full((n, n), np.nan)
 
     for start, end in chunk_indices(n, BATCH_SIZE):
         source_indices = range(start, end)
-        durations = fetch_duration_batch(coords_param, source_indices, all_indices)
-        matrix[start:end, :] = durations
+        durations, distances = fetch_matrix_batch(coords_param, source_indices, all_indices)
+        durations_matrix[start:end, :] = durations
+        distances_matrix[start:end, :] = distances
         print(f"Batch {start}-{end} de {n} listo.")
         time.sleep(REQUEST_DELAY_SECONDS)
 
-    return matrix
+    return durations_matrix, distances_matrix
 
 
 def main():
     points = load_points()
-    print(f"Calculando matriz de tiempos para {len(points)} puntos...")
+    print(f"Calculando matrices de tiempo y distancia para {len(points)} puntos...")
 
-    matrix = build_duration_matrix(points)
+    durations_matrix, distances_matrix = build_matrices(points)
 
-    matrix_df = pd.DataFrame(matrix, index=points["id"], columns=points["id"])
-    matrix_df.to_csv(MATRIX_DST)
-    print(f"Matriz guardada en: {MATRIX_DST}")
+    ids = points["id"]
+    pd.DataFrame(durations_matrix, index=ids, columns=ids).to_csv(TIME_MATRIX_DST)
+    print(f"Matriz de tiempos guardada en: {TIME_MATRIX_DST}")
+
+    pd.DataFrame(distances_matrix, index=ids, columns=ids).to_csv(DISTANCE_MATRIX_DST)
+    print(f"Matriz de distancias guardada en: {DISTANCE_MATRIX_DST}")
 
     points.to_csv(POINTS_INDEX_DST, index=False)
     print(f"Indice de puntos guardado en: {POINTS_INDEX_DST}")
