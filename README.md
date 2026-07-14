@@ -31,8 +31,8 @@ Minimize total route time across all trucks. Landfill trips are already costed i
 - Single shift, single day, each stop visited exactly once, no repeat/periodic visits.
 
 ## Distances / Travel Times
-- Source: Google Maps Distance Matrix API
-- Note: 222 points (220 stops + depot + landfill) means roughly 49,000 pairwise distances. Google's API caps requests at 25x25 origins/destinations, so the matrix needs to be built in batches (roughly 80 requests), not a single call.
+- Source: OSM API Distance Matrix
+- Note: 222 points (220 stops + depot + landfill) means roughly 49,000 pairwise distances, so the matrix needs to be built in batches (roughly 80 requests), not a single call.
 
 ## Constraints
 - A truck must return to a landfill before its load exceeds capacity, and may resume collecting stops afterward.
