@@ -3,3 +3,4 @@ numpy>=2.4
 requests>=2.33
 pytest>=9.1
 ortools>=9.15
+folium>=0.20
