@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -58,7 +59,7 @@ def test_format_minutes():
 
 
 def test_build_map_has_layer_per_active_truck(points, solution):
-    html = vr.build_map(solution, points).get_root().render()
+    html = vr.build_map(solution, points, use_roads=False).get_root().render()
 
     assert "Camion 0 (2 paradas)" in html
     assert "Camion 1 (1 paradas)" in html
@@ -67,7 +68,7 @@ def test_build_map_has_layer_per_active_truck(points, solution):
 
 
 def test_build_map_draws_direction_arrows_per_truck(points, solution):
-    html = vr.build_map(solution, points).get_root().render()
+    html = vr.build_map(solution, points, use_roads=False).get_root().render()
 
     assert html.count("setText") == solution["truck"].nunique()
     # folium serializes the arrow glyph as a JS unicode escape
@@ -76,5 +77,44 @@ def test_build_map_draws_direction_arrows_per_truck(points, solution):
 
 def test_build_map_written_to_file(tmp_path, points, solution):
     out = tmp_path / "mapa.html"
-    vr.build_map(solution, points).save(str(out))
+    vr.build_map(solution, points, use_roads=False).save(str(out))
     assert out.exists() and out.stat().st_size > 0
+
+
+PATH = [(28.69, -106.12, "DEPOT"), (28.63, -106.07, "STOP::A"), (28.69, -106.12, "DEPOT")]
+
+
+def test_fetch_road_geometry_converts_lonlat_to_latlon():
+    fake_json = {
+        "routes": [
+            {"geometry": {"coordinates": [[-106.12, 28.69], [-106.09, 28.66], [-106.07, 28.63]]}}
+        ]
+    }
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return fake_json
+
+    with patch.object(vr.requests, "get", return_value=FakeResponse()) as mock_get:
+        geometry = vr.fetch_road_geometry(PATH)
+
+    assert geometry == [(28.69, -106.12), (28.66, -106.09), (28.63, -106.07)]
+    assert "-106.12,28.69;-106.07,28.63;-106.12,28.69" in mock_get.call_args.args[0]
+
+
+def test_route_line_falls_back_to_straight_lines_on_error():
+    with patch.object(vr.requests, "get", side_effect=vr.requests.ConnectionError("down")):
+        coords = vr.route_line_coords(PATH, use_roads=True)
+
+    assert coords == [(28.69, -106.12), (28.63, -106.07), (28.69, -106.12)]
+
+
+def test_route_line_skips_network_when_roads_disabled():
+    with patch.object(vr.requests, "get") as mock_get:
+        coords = vr.route_line_coords(PATH, use_roads=False)
+
+    mock_get.assert_not_called()
+    assert coords == [(28.69, -106.12), (28.63, -106.07), (28.69, -106.12)]

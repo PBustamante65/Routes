@@ -1,20 +1,26 @@
 """
 Draws the solved trash-collection routes on an interactive map: one
 toggleable colored layer per truck, numbered stop markers, and distinct
-depot/landfill icons. Segments are straight lines between consecutive
-visits, not road geometry.
+depot/landfill icons. Route lines follow the real road geometry from
+OSRM's /route service, falling back to straight segments if unreachable.
 
 Usage:
     python3 visualize_routes.py
 """
 
+import time
+
 import folium
 import pandas as pd
+import requests
 from folium.plugins import PolyLineTextPath
 
 POINTS_INDEX_SRC = "Data/points-index.csv"
 SOLUTION_SRC = "Data/routes-solution.csv"
 MAP_DST = "Data/mapa_rutas.html"
+
+OSRM_ROUTE_URL = "https://router.project-osrm.org/route/v1/driving/{coords}"
+REQUEST_DELAY_SECONDS = 1
 
 TRUCK_COLORS = [
     "red", "blue", "green", "purple", "orange",
@@ -41,11 +47,37 @@ def build_truck_path(solution, points, truck):
     return path
 
 
+def fetch_road_geometry(path):
+    """Asks OSRM for the driving geometry through the path's waypoints.
+    Returns (lat, lon) tuples, or None if the request fails."""
+    coords = ";".join(f"{lon},{lat}" for lat, lon, _ in path)
+    url = OSRM_ROUTE_URL.format(coords=coords)
+    try:
+        response = requests.get(
+            url, params={"overview": "full", "geometries": "geojson"}, timeout=30
+        )
+        response.raise_for_status()
+        geometry = response.json()["routes"][0]["geometry"]["coordinates"]
+    except (requests.RequestException, KeyError, IndexError, ValueError) as exc:
+        print(f"OSRM /route fallo ({exc}); usando lineas rectas.")
+        return None
+    return [(lat, lon) for lon, lat in geometry]
+
+
+def route_line_coords(path, use_roads=True):
+    """Road geometry for the route, or the straight-line path as fallback."""
+    if use_roads:
+        geometry = fetch_road_geometry(path)
+        if geometry:
+            return geometry
+    return [(lat, lon) for lat, lon, _ in path]
+
+
 def format_minutes(seconds):
     return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
 
 
-def build_map(solution, points):
+def build_map(solution, points, use_roads=True):
     depot = points[points["tipo"] == "DEPOT"].iloc[0]
     landfill = points[points["tipo"] == "LANDFILL"].iloc[0]
 
@@ -76,12 +108,14 @@ def build_map(solution, points):
 
         path = build_truck_path(solution, points, truck)
         line = folium.PolyLine(
-            [(lat, lon) for lat, lon, _ in path],
+            route_line_coords(path, use_roads),
             color=color,
             weight=3,
             opacity=0.7,
         )
         line.add_to(group)
+        if use_roads:
+            time.sleep(REQUEST_DELAY_SECONDS)
         PolyLineTextPath(
             line,
             "  ➤  ",
