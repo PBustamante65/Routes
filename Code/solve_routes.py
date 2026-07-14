@@ -79,7 +79,9 @@ def solve(
     def time_transit(from_index, to_index):
         from_node = manager.IndexToNode(from_index)
         to_node = manager.IndexToNode(to_index)
-        travel = time_matrix[node_to_row(from_node, k_landfill)][node_to_row(to_node, k_landfill)]
+        travel = time_matrix[node_to_row(from_node, k_landfill)][
+            node_to_row(to_node, k_landfill)
+        ]
         if is_landfill(from_node):
             service = DUMP_SERVICE_SECONDS
         elif from_node == 0:
@@ -121,8 +123,12 @@ def solve(
     # Path-building strategies (PATH_CHEAPEST_ARC, SAVINGS) fail to find any
     # feasible first solution under the hard shift cap plus the empty-at-depot
     # constraint; insertion handles side constraints while constructing.
-    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
-    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    params.first_solution_strategy = (
+        routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+    )
+    params.local_search_metaheuristic = (
+        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    )
     params.time_limit.FromSeconds(time_limit_seconds)
 
     solution = routing.SolveWithParameters(params)
@@ -164,7 +170,9 @@ def summarize_route(rows, time_matrix, distance_matrix):
             stops += 1
             load_cbm += STOP_DEMAND_CBM
             service = STOP_SERVICE_SECONDS
-        visits.append({"row": row, "arrival_seconds": clock, "load_after_cbm": round(load_cbm, 1)})
+        visits.append(
+            {"row": row, "arrival_seconds": clock, "load_after_cbm": round(load_cbm, 1)}
+        )
         clock += service
         prev = row
 
@@ -182,7 +190,9 @@ def summarize_route(rows, time_matrix, distance_matrix):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--time-limit", type=int, default=60, help="segundos de busqueda")
+    parser.add_argument(
+        "--time-limit", type=int, default=60, help="segundos de busqueda"
+    )
     args = parser.parse_args()
 
     points = pd.read_csv(POINTS_INDEX_SRC)
@@ -190,7 +200,9 @@ def main():
     distance_matrix = pd.read_csv(DISTANCE_MATRIX_SRC, index_col=0).to_numpy()
 
     num_stops = len(points) - 2
-    print(f"Resolviendo: {num_stops} paradas, {NUM_TRUCKS} camiones, limite {args.time_limit}s...")
+    print(
+        f"Resolviendo: {num_stops} paradas, {NUM_TRUCKS} camiones, limite {args.time_limit}s..."
+    )
 
     routes = solve(time_matrix, num_stops, NUM_TRUCKS, args.time_limit)
 
@@ -214,6 +226,7 @@ def main():
                     "tipo": point["tipo"],
                     "arrival_seconds": visit["arrival_seconds"],
                     "load_after_cbm": visit["load_after_cbm"],
+                    "meters": distance_matrix[visit["row"]][DEPOT_ROW],
                 }
             )
         hours, rem = divmod(summary["total_seconds"], 3600)
