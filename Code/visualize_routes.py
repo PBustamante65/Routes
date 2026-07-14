@@ -10,6 +10,7 @@ Usage:
 
 import folium
 import pandas as pd
+from folium.plugins import PolyLineTextPath
 
 POINTS_INDEX_SRC = "Data/points-index.csv"
 SOLUTION_SRC = "Data/routes-solution.csv"
@@ -74,11 +75,19 @@ def build_map(solution, points):
         group = folium.FeatureGroup(name=f"Camion {truck} ({stops} paradas)")
 
         path = build_truck_path(solution, points, truck)
-        folium.PolyLine(
+        line = folium.PolyLine(
             [(lat, lon) for lat, lon, _ in path],
             color=color,
             weight=3,
             opacity=0.7,
+        )
+        line.add_to(group)
+        PolyLineTextPath(
+            line,
+            "  ➤  ",
+            repeat=True,
+            offset=5,
+            attributes={"fill": color, "font-size": "14"},
         ).add_to(group)
 
         for _, visit in visits.iterrows():

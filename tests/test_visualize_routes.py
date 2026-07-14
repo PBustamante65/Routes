@@ -66,6 +66,14 @@ def test_build_map_has_layer_per_active_truck(points, solution):
     assert "LANDFILL: L" in html
 
 
+def test_build_map_draws_direction_arrows_per_truck(points, solution):
+    html = vr.build_map(solution, points).get_root().render()
+
+    assert html.count("setText") == solution["truck"].nunique()
+    # folium serializes the arrow glyph as a JS unicode escape
+    assert "\\u27a4" in html
+
+
 def test_build_map_written_to_file(tmp_path, points, solution):
     out = tmp_path / "mapa.html"
     vr.build_map(solution, points).save(str(out))
