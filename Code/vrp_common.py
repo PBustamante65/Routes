@@ -123,6 +123,22 @@ def report_solution(routes, points, time_matrix, distance_matrix, dst_path, labe
         )
 
     pd.DataFrame(records).to_csv(dst_path, index=False)
+
+    summary_path = dst_path.rsplit(".csv", 1)[0] + "-summary.csv"
+    pd.DataFrame(
+        [
+            {
+                "truck": truck,
+                "stops": summary["stops"],
+                "dumps": summary["dumps"],
+                "total_seconds": summary["total_seconds"],
+                "total_meters": summary["total_meters"],
+            }
+            for truck, summary in enumerate(summaries)
+            if summary["stops"] > 0
+        ]
+    ).to_csv(summary_path, index=False)
+
     hours, rem = divmod(total_seconds, 3600)
     print(
         f"\nTotal: {hours}h{rem // 60:02d}m, {total_meters / 1000:.1f} km, "
