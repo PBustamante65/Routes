@@ -3,6 +3,8 @@ Draws the solved trash-collection routes on an interactive map: one
 toggleable colored layer per truck, numbered stop markers, and distinct
 depot/landfill icons. Route lines follow the real road geometry from
 OSRM's /route service, falling back to straight segments if unreachable.
+Per-truck distance/time totals (from the solver's summary CSV) are shown
+in each layer's label and in a fleet-wide stats panel on the map.
 
 Usage:
     python3 visualize_routes.py
@@ -17,6 +19,7 @@ from folium.plugins import PolyLineTextPath
 
 POINTS_INDEX_SRC = "Data/points-index.csv"
 SOLUTION_SRC = "Data/routes-solution.csv"
+SUMMARY_SRC = "Data/routes-solution-summary.csv"
 MAP_DST = "Data/mapa_rutas.html"
 
 OSRM_ROUTE_URL = "https://router.project-osrm.org/route/v1/driving/{coords}"
@@ -77,7 +80,32 @@ def format_minutes(seconds):
     return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
 
 
-def build_map(solution, points, use_roads=True):
+def stats_panel_html(summary):
+    """Floating box with the fleet totals: trucks used, distance, time, dumps."""
+    total_meters = summary["total_meters"].sum()
+    total_seconds = int(summary["total_seconds"].sum())
+    total_stops = int(summary["stops"].sum())
+    total_dumps = int(summary["dumps"].sum())
+    trucks_used = summary["truck"].nunique()
+
+    return f"""
+    <div style="
+        position: fixed; top: 10px; right: 10px; z-index: 9999;
+        background: white; padding: 10px 14px; border: 2px solid #444;
+        border-radius: 6px; font-size: 14px; line-height: 1.5;
+        box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+    ">
+        <b>Resumen de la flota</b><br>
+        Camiones usados: {trucks_used}<br>
+        Paradas totales: {total_stops}<br>
+        Viajes al relleno: {total_dumps}<br>
+        Distancia total: {total_meters / 1000:.1f} km<br>
+        Tiempo total: {format_minutes(total_seconds)}
+    </div>
+    """
+
+
+def build_map(solution, points, use_roads=True, summary=None):
     depot = points[points["tipo"] == "DEPOT"].iloc[0]
     landfill = points[points["tipo"] == "LANDFILL"].iloc[0]
 
@@ -104,7 +132,14 @@ def build_map(solution, points, use_roads=True):
             continue
         color = truck_color(truck)
         stops = (visits["tipo"] == "STOP").sum()
-        group = folium.FeatureGroup(name=f"Camion {truck} ({stops} paradas)")
+        label = f"Camion {truck} ({stops} paradas)"
+        if summary is not None:
+            truck_summary = summary[summary["truck"] == truck]
+            if not truck_summary.empty:
+                km = truck_summary["total_meters"].iloc[0] / 1000
+                shift = format_minutes(int(truck_summary["total_seconds"].iloc[0]))
+                label = f"Camion {truck} ({stops} paradas, {km:.1f} km, {shift})"
+        group = folium.FeatureGroup(name=label)
 
         path = build_truck_path(solution, points, truck)
         line = folium.PolyLine(
@@ -155,6 +190,9 @@ def build_map(solution, points, use_roads=True):
 
         group.add_to(mapa)
 
+    if summary is not None and not summary.empty:
+        mapa.get_root().html.add_child(folium.Element(stats_panel_html(summary)))
+
     folium.LayerControl(collapsed=False).add_to(mapa)
     return mapa
 
@@ -162,8 +200,12 @@ def build_map(solution, points, use_roads=True):
 def main():
     points = pd.read_csv(POINTS_INDEX_SRC)
     solution = pd.read_csv(SOLUTION_SRC)
+    try:
+        summary = pd.read_csv(SUMMARY_SRC)
+    except FileNotFoundError:
+        summary = None
 
-    mapa = build_map(solution, points)
+    mapa = build_map(solution, points, summary=summary)
     mapa.save(MAP_DST)
     print(f"Mapa guardado en: {MAP_DST}")
 
