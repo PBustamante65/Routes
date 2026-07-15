@@ -75,6 +75,50 @@ def test_build_map_draws_direction_arrows_per_truck(points, solution):
     assert "\\u27a4" in html
 
 
+@pytest.fixture
+def summary():
+    return pd.DataFrame(
+        {
+            "truck": [0, 1],
+            "stops": [2, 1],
+            "dumps": [1, 1],
+            "total_seconds": [2500, 1900],
+            "total_meters": [12000.0, 5000.0],
+        }
+    )
+
+
+def test_build_map_shows_per_truck_distance_and_time(points, solution, summary):
+    html = vr.build_map(solution, points, use_roads=False, summary=summary).get_root().render()
+
+    assert "12.0 km" in html
+    assert "5.0 km" in html
+
+
+def test_build_map_shows_fleet_totals_panel(points, solution, summary):
+    html = vr.build_map(solution, points, use_roads=False, summary=summary).get_root().render()
+
+    assert "Resumen de la flota" in html
+    assert "17.0 km" in html
+    assert vr.format_minutes(4400) in html
+
+
+def test_build_map_without_summary_has_no_stats_panel(points, solution):
+    html = vr.build_map(solution, points, use_roads=False).get_root().render()
+
+    assert "Resumen de la flota" not in html
+
+
+def test_stats_panel_html_aggregates_fleet_totals(summary):
+    html = vr.stats_panel_html(summary)
+
+    assert "Camiones usados: 2" in html
+    assert "Paradas totales: 3" in html
+    assert "Viajes al relleno: 2" in html
+    assert "17.0 km" in html
+    assert vr.format_minutes(4400) in html
+
+
 def test_build_map_written_to_file(tmp_path, points, solution):
     out = tmp_path / "mapa.html"
     vr.build_map(solution, points, use_roads=False).save(str(out))
