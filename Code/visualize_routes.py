@@ -26,8 +26,16 @@ OSRM_ROUTE_URL = "https://router.project-osrm.org/route/v1/driving/{coords}"
 REQUEST_DELAY_SECONDS = 1
 
 TRUCK_COLORS = [
-    "red", "blue", "green", "purple", "orange",
-    "darkred", "cadetblue", "darkgreen", "darkpurple", "black",
+    "red",
+    "blue",
+    "green",
+    "purple",
+    "orange",
+    "darkred",
+    "cadetblue",
+    "darkgreen",
+    "darkpurple",
+    "black",
 ]
 
 
@@ -90,7 +98,7 @@ def stats_panel_html(summary):
 
     return f"""
     <div style="
-        position: fixed; top: 10px; right: 10px; z-index: 9999;
+        position: fixed; top: 10px; left: 10px; z-index: 9999;
         background: white; padding: 10px 14px; border: 2px solid #444;
         border-radius: 6px; font-size: 14px; line-height: 1.5;
         box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
