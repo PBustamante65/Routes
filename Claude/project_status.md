@@ -15,14 +15,14 @@ Standalone scripts that are **not** part of the active pipeline (early explorati
 
 ## Solvers implemented
 
-| Solver | File | Status | Result (218 stops, 60s limit) |
+| Solver | File | Status | Result (218 stops) |
 |---|---|---|---|
-| OR-Tools (baseline) | `Code/solve_routes.py` | Feeds the map | 41h58m total, 1185.4 km, 6 trucks used, 28 landfill trips |
-| Genetic algorithm (GA) | `Code/solve_ga.py` | Implemented and tested, comparison only | 43h26m total, 1248.9 km, 6 trucks used, 28 landfill trips |
+| OR-Tools (baseline) | `Code/solve_routes.py` | Feeds the map | 41h58m total, 1185.4 km, 6 trucks used, 28 landfill trips (60s limit) |
+| Genetic algorithm (GA) | `Code/solve_ga.py` | Implemented and tested, feeds the map alongside OR-Tools | 43h39m total, 1270.3 km, 6 trucks used, 28 landfill trips (120s limit) |
 
 - **`Code/vrp_common.py`** — shared module: data loading, route costing (`summarize_route`), deterministic landfill-dump insertion (`insert_dumps`), and CSV reporting (`report_solution`). Both solvers and the benchmark use it so they compete on the exact same cost definition.
 - **`Code/benchmark_solvers.py`** — runs both solvers with the same time budget and prints a comparison table.
-- **Comparison result**: after seeding part of the initial population with nearest-neighbor-constructed tours (`nearest_neighbor_tour`) refined by 2-opt (`two_opt`, also reapplied to the elites carried over each generation), the GA closed most of the gap to OR-Tools: 43h26m/1248.9km/6 trucks vs. OR-Tools' 41h58m/1185.4km/6 trucks (previously 66h12m/2619.5km/10 trucks with pure-random init and no local search). `nn_seed_fraction=0.5` and `two_opt_max_passes=2` are `solve()` keyword params (not exposed on the CLI, same as `elite_size`) if this needs further tuning.
+- **Comparison result**: after seeding part of the initial population with nearest-neighbor-constructed tours (`nearest_neighbor_tour`) refined by 2-opt (`two_opt`, also reapplied to the elites carried over each generation), the GA closed most of the gap to OR-Tools: at a 60s budget, 43h26m/1248.9km/6 trucks vs. OR-Tools' 41h58m/1185.4km/6 trucks (previously 66h12m/2619.5km/10 trucks with pure-random init and no local search). Bumping the GA's budget to 120s barely moved the result (43h39m/1270.3km) -- it plateaus well before then, so more time alone isn't the lever; the next step would be tuning `nn_seed_fraction`/`two_opt_max_passes` (both `solve()` keyword params, not exposed on the CLI, same as `elite_size`) or improving the crossover/mutation operators.
 - **Gotcha fixed**: `solve_ga.py`'s and `benchmark_solvers.py`'s `main()` CLI parsers had their own argparse defaults for `--population`/`--mutation-rate`, separate from `solve()`'s own defaults, and always passed them explicitly -- so tuning `solve()`'s defaults silently had no effect unless the matching CLI flags were also passed. Fixed by keeping both in sync and exposing `--tournament-k` on both entrypoints.
 
 ## Interactive add-stop pipeline (`Code/pipeline/`)
@@ -44,7 +44,7 @@ This was built and merged via PRs [#8](../../pull/8) and [#9](../../pull/9) (bot
 - `gh` (GitHub CLI) is now installed via Homebrew and authenticated as `PBustamante65`, for creating/merging PRs from the command line.
 
 ## Known gaps / discrepancies
-- The map (`mapa_rutas.html`) only ever reflects OR-Tools; there's no way to visualize the GA's solution without editing the script.
+- **Fixed**: the flat `Code/visualize_routes.py` now overlays both solvers on the same map when `Data/routes-solution-ga.csv` exists -- OR-Tools solid lines, GA dashed, same per-truck color in both, plus a side-by-side comparison panel (trucks/dumps/distance/time) instead of the single-solver stats panel. Falls back to OR-Tools-only if the GA file is missing. The `Code/pipeline/` copy of `visualize_routes.py` is unchanged (still OR-Tools-only).
 - The GA has no construction heuristic or local search — it's a baseline implementation for comparison, not yet a competitive alternative.
 - `geodata.py`, `visualize.py`, `maptest.py` remain in `Code/` uncleaned; leftovers from early exploration.
 - **Fixed: the flat and `pipeline/` scripts used to collide on output filenames.** They previously both wrote `Data/points-index.csv` and `Data/routes-solution.csv`, so whichever pipeline ran most recently silently won. Fixed by giving `Code/pipeline/*` its own `Data/pipeline/` directory (own copy of `oxxo-stops.csv`, `points-index.csv`, both matrices, `routes-solution.csv` + summary, `mapa_rutas.html`); the flat scripts still read/write `Data/` directly. `Code/pipeline/add_points.py` still reads its base stop list from the top-level `Data/oxxo-stops.csv` (218 clean stores) and appends new stops into `Data/pipeline/oxxo-stops.csv` only.
