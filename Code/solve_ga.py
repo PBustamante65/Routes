@@ -115,10 +115,10 @@ def solve(
     time_limit_seconds,
     capacity_cbm=TRUCK_CAPACITY_CBM,
     shift_cap_seconds=SHIFT_CAP_SECONDS,
-    population_size=60,
+    population_size=100,
     elite_size=4,
-    mutation_rate=0.05,
-    tournament_k=3,
+    mutation_rate=0.15,
+    tournament_k=4,
     seed=None,
 ):
     """Returns one list of visited matrix rows per truck (depot excluded),
@@ -177,8 +177,9 @@ def solve(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--time-limit", type=int, default=60, help="segundos de busqueda")
-    parser.add_argument("--population", type=int, default=60, help="tamano de poblacion")
-    parser.add_argument("--mutation-rate", type=float, default=0.05)
+    parser.add_argument("--population", type=int, default=100, help="tamano de poblacion")
+    parser.add_argument("--mutation-rate", type=float, default=0.15)
+    parser.add_argument("--tournament-k", type=int, default=4)
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
 
@@ -196,6 +197,7 @@ def main():
         args.time_limit,
         population_size=args.population,
         mutation_rate=args.mutation_rate,
+        tournament_k=args.tournament_k,
         seed=args.seed,
     )
     report_solution(routes, points, time_matrix, distance_matrix, SOLUTION_DST)

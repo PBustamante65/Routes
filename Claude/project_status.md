@@ -18,11 +18,12 @@ Standalone scripts that are **not** part of the active pipeline (early explorati
 | Solver | File | Status | Result (218 stops, 60s limit) |
 |---|---|---|---|
 | OR-Tools (baseline) | `Code/solve_routes.py` | Feeds the map | 41h58m total, 1185.4 km, 6 trucks used, 28 landfill trips |
-| Genetic algorithm (GA) | `Code/solve_ga.py` | Implemented and tested, comparison only | 65h33m total, 2576.0 km, 10 trucks used, 28 landfill trips |
+| Genetic algorithm (GA) | `Code/solve_ga.py` | Implemented and tested, comparison only | 66h12m total, 2619.5 km, 10 trucks used, 28 landfill trips |
 
 - **`Code/vrp_common.py`** — shared module: data loading, route costing (`summarize_route`), deterministic landfill-dump insertion (`insert_dumps`), and CSV reporting (`report_solution`). Both solvers and the benchmark use it so they compete on the exact same cost definition.
 - **`Code/benchmark_solvers.py`** — runs both solvers with the same time budget and prints a comparison table.
-- **Comparison result**: at a 60s budget, OR-Tools (mature guided local search) clearly beats the GA (basic implementation: order crossover, swap mutation, no local search or informed initial construction). To improve the GA, the natural next step would be seeding the initial population with a nearest-neighbor heuristic and/or adding 2-opt over the chromosomes, instead of starting from purely random permutations.
+- **Comparison result**: at a 60s budget, OR-Tools (mature guided local search) clearly beats the GA (basic implementation: order crossover, swap mutation, no local search or informed initial construction), even after retuning `population_size=100`, `mutation_rate=0.15`, `tournament_k=4` (up from 60/0.05/3) -- the GA result changed only marginally (66h12m vs. the prior 65h33m). To meaningfully improve the GA, the natural next step would be seeding the initial population with a nearest-neighbor heuristic and/or adding 2-opt over the chromosomes, instead of starting from purely random permutations.
+- **Gotcha fixed**: `solve_ga.py`'s and `benchmark_solvers.py`'s `main()` CLI parsers had their own argparse defaults for `--population`/`--mutation-rate`, separate from `solve()`'s own defaults, and always passed them explicitly -- so tuning `solve()`'s defaults silently had no effect unless the matching CLI flags were also passed. Fixed by keeping both in sync and exposing `--tournament-k` on both entrypoints.
 
 ## Interactive add-stop pipeline (`Code/pipeline/`)
 A second, class-based pipeline was added alongside the original flat scripts: `TimeMatrixBuilder` (`time_matrix.py`), `Solution` (`solve_routes.py`), and `Map` (`visualize_routes.py`) are mechanical refactors of `build_time_matrix.py` / `solve_routes.py` / `visualize_routes.py` into classes with identical logic, plus a new `add_points.py` entrypoint that:
