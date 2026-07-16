@@ -37,11 +37,11 @@ STAGE_2_GRID = {
 }
 
 DEFAULT_PARAMS = {
-    "population_size": 100,
+    "population_size": 60,
     "mutation_rate": 0.15,
-    "tournament_k": 4,
-    "nn_seed_fraction": 0.5,
-    "two_opt_max_passes": 2,
+    "tournament_k": 5,
+    "nn_seed_fraction": 1.0,
+    "two_opt_max_passes": 3,
 }
 
 

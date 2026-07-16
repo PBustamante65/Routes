@@ -16,7 +16,7 @@ reapplied to the elites carried over each generation -- a memetic-GA touch
 meant to improve on a purely random-init, no-local-search baseline.
 
 Usage:
-    python3 solve_ga.py [--time-limit 60] [--population 100] [--seed 0]
+    python3 solve_ga.py [--time-limit 60] [--population 60] [--seed 0]
 """
 
 import argparse
@@ -164,12 +164,12 @@ def solve(
     time_limit_seconds,
     capacity_cbm=TRUCK_CAPACITY_CBM,
     shift_cap_seconds=SHIFT_CAP_SECONDS,
-    population_size=100,
+    population_size=60,
     elite_size=4,
     mutation_rate=0.15,
-    tournament_k=4,
-    nn_seed_fraction=0.5,
-    two_opt_max_passes=2,
+    tournament_k=5,
+    nn_seed_fraction=1.0,
+    two_opt_max_passes=3,
     seed=None,
 ):
     """Returns one list of visited matrix rows per truck (depot excluded),
@@ -239,9 +239,9 @@ def solve(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--time-limit", type=int, default=60, help="segundos de busqueda")
-    parser.add_argument("--population", type=int, default=100, help="tamano de poblacion")
+    parser.add_argument("--population", type=int, default=60, help="tamano de poblacion")
     parser.add_argument("--mutation-rate", type=float, default=0.15)
-    parser.add_argument("--tournament-k", type=int, default=4)
+    parser.add_argument("--tournament-k", type=int, default=5)
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
 

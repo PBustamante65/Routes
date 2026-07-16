@@ -3,8 +3,8 @@ Runs the OR-Tools and GA solvers on the same VRP instance with the same
 time budget each, and prints a comparison table.
 
 Usage:
-    python3 benchmark_solvers.py [--time-limit 60] [--population 100]
-        [--mutation-rate 0.15] [--tournament-k 4] [--seed 0]
+    python3 benchmark_solvers.py [--time-limit 60] [--population 60]
+        [--mutation-rate 0.15] [--tournament-k 5] [--seed 0]
 """
 
 import argparse
@@ -38,9 +38,9 @@ def aggregate(routes, time_matrix, distance_matrix):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--time-limit", type=int, default=60, help="segundos de busqueda por solver")
-    parser.add_argument("--population", type=int, default=100, help="tamano de poblacion (GA)")
+    parser.add_argument("--population", type=int, default=60, help="tamano de poblacion (GA)")
     parser.add_argument("--mutation-rate", type=float, default=0.15, help="tasa de mutacion (GA)")
-    parser.add_argument("--tournament-k", type=int, default=4, help="tamano de torneo (GA)")
+    parser.add_argument("--tournament-k", type=int, default=5, help="tamano de torneo (GA)")
     parser.add_argument("--seed", type=int, default=0, help="semilla del GA")
     args = parser.parse_args()
 
