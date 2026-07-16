@@ -4,10 +4,10 @@ import pandas as pd
 import requests
 
 LANDFILL_AND_DEPOT_SRC = "Data/landfill-and-depot.csv"
-OXXO_STOPS_SRC = "Data/oxxo-stopsTEST.csv"
-TIME_MATRIX_DST = "Data/time-matrix-seconds.csv"
-DISTANCE_MATRIX_DST = "Data/distance-matrix-meters.csv"
-POINTS_INDEX_DST = "Data/points-index.csv"
+OXXO_STOPS_SRC = "Data/pipeline/oxxo-stops.csv"
+TIME_MATRIX_DST = "Data/pipeline/time-matrix-seconds.csv"
+DISTANCE_MATRIX_DST = "Data/pipeline/distance-matrix-meters.csv"
+POINTS_INDEX_DST = "Data/pipeline/points-index.csv"
 
 OSRM_TABLE_URL = "https://router.project-osrm.org/table/v1/driving/{coords}"
 BATCH_SIZE = (

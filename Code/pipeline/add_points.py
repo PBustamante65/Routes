@@ -5,7 +5,7 @@ from visualize_routes import Map
 
 
 CSV_PATH = "Data/oxxo-stops.csv"
-CSV_PATH2 = "Data/oxxo-stopsTEST.csv"
+CSV_PATH2 = "Data/pipeline/oxxo-stops.csv"
 tmb = TimeMatrixBuilder()
 sol = Solution()
 map = Map()
