@@ -120,6 +120,54 @@ def test_fitness_penalizes_shift_cap_violation():
     assert cost > uncapped_total
 
 
+def test_nearest_neighbor_tour_visits_every_stop_once():
+    time_matrix = uniform_time_matrix()
+    tour = ga.nearest_neighbor_tour(time_matrix, STOP_ROWS, vc.DEPOT_ROW)
+
+    assert sorted(tour) == STOP_ROWS
+
+
+def test_nearest_neighbor_tour_picks_the_closest_stop_first():
+    n = 2 + NUM_STOPS
+    time_matrix = np.full((n, n), 1000)
+    np.fill_diagonal(time_matrix, 0)
+    time_matrix[vc.DEPOT_ROW][3] = 5
+
+    tour = ga.nearest_neighbor_tour(time_matrix, STOP_ROWS, vc.DEPOT_ROW)
+
+    assert tour[0] == 3
+
+
+def test_two_opt_preserves_permutation():
+    rng = random.Random(4)
+    time_matrix = uniform_time_matrix()
+    chromosome = STOP_ROWS[:]
+    rng.shuffle(chromosome)
+
+    improved = ga.two_opt(chromosome, time_matrix, vc.DEPOT_ROW)
+
+    assert sorted(improved) == STOP_ROWS
+
+
+def test_two_opt_never_worsens_giant_tour_cost():
+    def giant_tour_cost(chromosome, time_matrix, depot_row):
+        tour = [depot_row] + list(chromosome) + [depot_row]
+        return sum(time_matrix[a][b] for a, b in zip(tour, tour[1:]))
+
+    n = 2 + NUM_STOPS
+    rng = random.Random(5)
+    time_matrix = np.array([[rng.randint(1, 100) for _ in range(n)] for _ in range(n)])
+    np.fill_diagonal(time_matrix, 0)
+    chromosome = STOP_ROWS[:]
+    rng.shuffle(chromosome)
+
+    before = giant_tour_cost(chromosome, time_matrix, vc.DEPOT_ROW)
+    improved = ga.two_opt(chromosome, time_matrix, vc.DEPOT_ROW)
+    after = giant_tour_cost(improved, time_matrix, vc.DEPOT_ROW)
+
+    assert after <= before
+
+
 def test_infeasible_shift_cap_raises():
     time_matrix = uniform_time_matrix()
     distance_matrix = time_matrix * 10.0

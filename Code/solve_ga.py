@@ -10,8 +10,13 @@ separate decisions. Landfill dumps are then inserted deterministically
 (vrp_common.insert_dumps) since dumping is forced by capacity, not a
 choice the GA needs to make.
 
+Part of the initial population is seeded with nearest-neighbor-constructed
+tours (refined by 2-opt) instead of pure random permutations, and 2-opt is
+reapplied to the elites carried over each generation -- a memetic-GA touch
+meant to improve on a purely random-init, no-local-search baseline.
+
 Usage:
-    python3 solve_ga.py [--time-limit 60] [--population 60] [--seed 0]
+    python3 solve_ga.py [--time-limit 60] [--population 100] [--seed 0]
 """
 
 import argparse
@@ -19,6 +24,7 @@ import random
 import time
 
 from vrp_common import (
+    DEPOT_ROW,
     NUM_TRUCKS,
     SHIFT_CAP_SECONDS,
     TRUCK_CAPACITY_CBM,
@@ -101,6 +107,49 @@ def swap_mutation(rng, chromosome, mutation_rate):
     return chromosome
 
 
+def nearest_neighbor_tour(time_matrix, stop_rows, start_row):
+    """Greedy construction: repeatedly visits the closest unvisited stop to
+    the current one, starting from start_row (which is itself not part of
+    the returned tour -- e.g. the depot, or a random stop for diversity
+    across several seeded individuals)."""
+    remaining = set(stop_rows)
+    tour = []
+    current = start_row
+    while remaining:
+        next_stop = min(remaining, key=lambda row: time_matrix[current][row])
+        tour.append(next_stop)
+        remaining.remove(next_stop)
+        current = next_stop
+    return tour
+
+
+def two_opt(chromosome, time_matrix, depot_row, max_passes=2):
+    """First-improvement 2-opt over the giant tour depot -> chromosome ->
+    depot, using time_matrix as the edge cost. This ignores the truck
+    splits/capacity that the real fitness() accounts for, but is a cheap,
+    standard proxy for tour quality (a memetic-GA local search over the
+    full permutation, not per truck route). Capped at max_passes full
+    sweeps since a sweep is O(n^2) and this runs every generation."""
+    tour = [depot_row] + list(chromosome) + [depot_row]
+    m = len(tour)
+    for _ in range(max_passes):
+        improved = False
+        for i in range(1, m - 1):
+            for j in range(i + 1, m - 1):
+                a, b = tour[i - 1], tour[i]
+                c, d = tour[j], tour[j + 1]
+                delta = (
+                    time_matrix[a][c] + time_matrix[b][d]
+                    - time_matrix[a][b] - time_matrix[c][d]
+                )
+                if delta < -1e-9:
+                    tour[i : j + 1] = tour[i : j + 1][::-1]
+                    improved = True
+        if not improved:
+            break
+    return tour[1:-1]
+
+
 def tournament_select(rng, population, fitnesses, k):
     contenders = rng.sample(range(len(population)), k)
     best = min(contenders, key=lambda idx: fitnesses[idx])
@@ -119,6 +168,8 @@ def solve(
     elite_size=4,
     mutation_rate=0.15,
     tournament_k=4,
+    nn_seed_fraction=0.5,
+    two_opt_max_passes=2,
     seed=None,
 ):
     """Returns one list of visited matrix rows per truck (depot excluded),
@@ -131,8 +182,16 @@ def solve(
             chromosome, time_matrix, distance_matrix, num_trucks, capacity_cbm, shift_cap_seconds
         )
 
-    population = []
-    for _ in range(population_size):
+    def build_nn_individual():
+        # Randomized start point so several NN-seeded individuals differ,
+        # instead of all collapsing onto the single depot-start NN tour.
+        start_row = rng.choice(stop_rows)
+        tour = nearest_neighbor_tour(time_matrix, stop_rows, start_row)
+        return two_opt(tour, time_matrix, DEPOT_ROW, max_passes=two_opt_max_passes)
+
+    nn_count = round(population_size * nn_seed_fraction)
+    population = [build_nn_individual() for _ in range(nn_count)]
+    for _ in range(population_size - nn_count):
         individual = stop_rows[:]
         rng.shuffle(individual)
         population.append(individual)
@@ -145,7 +204,10 @@ def solve(
     start = time.monotonic()
     while time.monotonic() - start < time_limit_seconds:
         ranked = sorted(range(len(population)), key=lambda i: fitnesses[i])
-        next_population = [population[i][:] for i in ranked[:elite_size]]
+        next_population = [
+            two_opt(population[i], time_matrix, DEPOT_ROW, max_passes=two_opt_max_passes)
+            for i in ranked[:elite_size]
+        ]
         while len(next_population) < population_size:
             parent_a = tournament_select(rng, population, fitnesses, tournament_k)
             parent_b = tournament_select(rng, population, fitnesses, tournament_k)
