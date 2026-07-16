@@ -125,6 +125,45 @@ def test_build_map_written_to_file(tmp_path, points, solution):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_build_map_prefixes_layer_label_with_solver_name(points, solution):
+    html = vr.build_map(solution, points, use_roads=False, name="OR-Tools").get_root().render()
+
+    assert "OR-Tools - Camion 0 (2 paradas)" in html
+
+
+def test_build_map_can_overlay_a_second_solver_on_the_same_map(points, solution):
+    ga_solution = solution.copy()
+    mapa = vr.build_map(solution, points, use_roads=False, name="OR-Tools", show_stats_panel=False)
+    mapa = vr.build_map(
+        ga_solution, points, use_roads=False, mapa=mapa, name="GA", dash_array="12,10",
+        show_stats_panel=False,
+    )
+    html = mapa.get_root().render()
+
+    assert "OR-Tools - Camion 0 (2 paradas)" in html
+    assert "GA - Camion 0 (2 paradas)" in html
+    assert html.count("DEPOT: D") == 1  # markers from the first call only, not duplicated
+    assert "dashArray" in html
+
+
+def test_comparison_panel_html_lists_each_solver(summary):
+    ga_summary = summary.copy()
+    ga_summary["total_seconds"] = [3000, 2000]
+
+    html = vr.comparison_panel_html([("OR-Tools", summary), ("GA", ga_summary)])
+
+    assert "Comparacion de solvers" in html
+    assert "OR-Tools" in html and "GA" in html
+    assert "17.0 km" in html
+
+
+def test_comparison_panel_html_skips_missing_summaries(summary):
+    html = vr.comparison_panel_html([("OR-Tools", summary), ("GA", None)])
+
+    assert "OR-Tools" in html
+    assert "GA" not in html
+
+
 PATH = [(28.69, -106.12, "DEPOT"), (28.63, -106.07, "STOP::A"), (28.69, -106.12, "DEPOT")]
 
 

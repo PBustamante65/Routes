@@ -6,6 +6,11 @@ OSRM's /route service, falling back to straight segments if unreachable.
 Per-truck distance/time totals (from the solver's summary CSV) are shown
 in each layer's label and in a fleet-wide stats panel on the map.
 
+When the GA solution is present (Data/routes-solution-ga.csv), both
+solvers are drawn on the same map for comparison: OR-Tools solid lines,
+GA dashed, same truck-index color scheme in both, plus a side-by-side
+comparison panel instead of the single-solver stats panel.
+
 Usage:
     python3 visualize_routes.py
 """
@@ -20,7 +25,10 @@ from folium.plugins import PolyLineTextPath
 POINTS_INDEX_SRC = "Data/points-index.csv"
 SOLUTION_SRC = "Data/routes-solution.csv"
 SUMMARY_SRC = "Data/routes-solution-summary.csv"
+GA_SOLUTION_SRC = "Data/routes-solution-ga.csv"
+GA_SUMMARY_SRC = "Data/routes-solution-ga-summary.csv"
 MAP_DST = "Data/mapa_rutas.html"
+GA_DASH_ARRAY = "12,10"
 
 OSRM_ROUTE_URL = "https://router.project-osrm.org/route/v1/driving/{coords}"
 REQUEST_DELAY_SECONDS = 1
@@ -113,26 +121,84 @@ def stats_panel_html(summary):
     """
 
 
-def build_map(solution, points, use_roads=True, summary=None):
-    depot = points[points["tipo"] == "DEPOT"].iloc[0]
-    landfill = points[points["tipo"] == "LANDFILL"].iloc[0]
+def comparison_panel_html(named_summaries):
+    """Floating box comparing fleet totals across solvers, one row per
+    (name, summary) pair with a non-empty summary."""
+    rows = ""
+    for name, summary in named_summaries:
+        if summary is None or summary.empty:
+            continue
+        total_meters = summary["total_meters"].sum()
+        total_seconds = int(summary["total_seconds"].sum())
+        total_dumps = int(summary["dumps"].sum())
+        trucks_used = summary["truck"].nunique()
+        rows += (
+            f"<tr><td style='padding-right: 10px;'>{name}</td>"
+            f"<td style='padding-right: 10px;'>{trucks_used}</td>"
+            f"<td style='padding-right: 10px;'>{total_dumps}</td>"
+            f"<td style='padding-right: 10px;'>{total_meters / 1000:.1f} km</td>"
+            f"<td>{format_minutes(total_seconds)}</td></tr>"
+        )
 
-    mapa = folium.Map(
-        location=[points["latitud"].mean(), points["longitud"].mean()],
-        zoom_start=12,
-        tiles="OpenStreetMap",
-    )
+    return f"""
+    <div style="
+        position: fixed; top: 10px; left: 10px; z-index: 9999;
+        background: white; padding: 10px 14px; border: 2px solid #444;
+        border-radius: 6px; font-size: 13px; line-height: 1.4;
+        box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+    ">
+        <b>Comparacion de solvers</b>
+        <table style="border-collapse: collapse; margin-top: 6px;">
+            <tr style="font-weight: bold;">
+                <td style="padding-right: 10px;">Solver</td>
+                <td style="padding-right: 10px;">Camiones</td>
+                <td style="padding-right: 10px;">Rellenos</td>
+                <td style="padding-right: 10px;">Distancia</td>
+                <td>Tiempo</td>
+            </tr>
+            {rows}
+        </table>
+    </div>
+    """
 
-    folium.Marker(
-        [depot["latitud"], depot["longitud"]],
-        tooltip=f"DEPOT: {depot['tienda']}",
-        icon=folium.Icon(color="gray", icon="home"),
-    ).add_to(mapa)
-    folium.Marker(
-        [landfill["latitud"], landfill["longitud"]],
-        tooltip=f"LANDFILL: {landfill['tienda']}",
-        icon=folium.Icon(color="gray", icon="trash", prefix="fa"),
-    ).add_to(mapa)
+
+def build_map(
+    solution,
+    points,
+    use_roads=True,
+    summary=None,
+    mapa=None,
+    name=None,
+    dash_array=None,
+    show_stats_panel=True,
+):
+    """Draws one solver's routes as toggleable per-truck layers. Pass an
+    existing mapa (as returned by a previous call) to overlay a second
+    solver's routes on the same map instead of starting a new one --
+    used to compare solvers (see main()). name prefixes each truck's
+    layer label (e.g. "GA - Camion 0 ..."); dash_array distinguishes
+    solvers visually when overlaid (Leaflet's stroke-dasharray)."""
+    created_new_map = mapa is None
+    if mapa is None:
+        depot = points[points["tipo"] == "DEPOT"].iloc[0]
+        landfill = points[points["tipo"] == "LANDFILL"].iloc[0]
+
+        mapa = folium.Map(
+            location=[points["latitud"].mean(), points["longitud"].mean()],
+            zoom_start=12,
+            tiles="OpenStreetMap",
+        )
+
+        folium.Marker(
+            [depot["latitud"], depot["longitud"]],
+            tooltip=f"DEPOT: {depot['tienda']}",
+            icon=folium.Icon(color="gray", icon="home"),
+        ).add_to(mapa)
+        folium.Marker(
+            [landfill["latitud"], landfill["longitud"]],
+            tooltip=f"LANDFILL: {landfill['tienda']}",
+            icon=folium.Icon(color="gray", icon="trash", prefix="fa"),
+        ).add_to(mapa)
 
     for truck in sorted(solution["truck"].unique()):
         visits = solution[solution["truck"] == truck].sort_values("seq")
@@ -147,6 +213,8 @@ def build_map(solution, points, use_roads=True, summary=None):
                 km = truck_summary["total_meters"].iloc[0] / 1000
                 shift = format_minutes(int(truck_summary["total_seconds"].iloc[0]))
                 label = f"Camion {truck} ({stops} paradas, {km:.1f} km, {shift})"
+        if name:
+            label = f"{name} - {label}"
         group = folium.FeatureGroup(name=label)
 
         path = build_truck_path(solution, points, truck)
@@ -155,6 +223,7 @@ def build_map(solution, points, use_roads=True, summary=None):
             color=color,
             weight=3,
             opacity=0.7,
+            dashArray=dash_array,
         )
         line.add_to(group)
         if use_roads:
@@ -198,10 +267,12 @@ def build_map(solution, points, use_roads=True, summary=None):
 
         group.add_to(mapa)
 
-    if summary is not None and not summary.empty:
+    if show_stats_panel and summary is not None and not summary.empty:
         mapa.get_root().html.add_child(folium.Element(stats_panel_html(summary)))
 
-    folium.LayerControl(collapsed=False).add_to(mapa)
+    if created_new_map:
+        folium.LayerControl(collapsed=False).add_to(mapa)
+
     return mapa
 
 
@@ -213,7 +284,35 @@ def main():
     except FileNotFoundError:
         summary = None
 
-    mapa = build_map(solution, points, summary=summary)
+    try:
+        ga_solution = pd.read_csv(GA_SOLUTION_SRC)
+    except FileNotFoundError:
+        ga_solution = None
+
+    if ga_solution is None:
+        mapa = build_map(solution, points, summary=summary, name="OR-Tools")
+    else:
+        try:
+            ga_summary = pd.read_csv(GA_SUMMARY_SRC)
+        except FileNotFoundError:
+            ga_summary = None
+
+        mapa = build_map(
+            solution, points, summary=summary, name="OR-Tools", show_stats_panel=False
+        )
+        mapa = build_map(
+            ga_solution,
+            points,
+            summary=ga_summary,
+            mapa=mapa,
+            name="GA",
+            dash_array=GA_DASH_ARRAY,
+            show_stats_panel=False,
+        )
+        mapa.get_root().html.add_child(
+            folium.Element(comparison_panel_html([("OR-Tools", summary), ("GA", ga_summary)]))
+        )
+
     mapa.save(MAP_DST)
     print(f"Mapa guardado en: {MAP_DST}")
 
