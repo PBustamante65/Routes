@@ -30,7 +30,7 @@ from vrp_common import (
     summarize_route,
 )
 
-SOLUTION_DST = "Data/routes-solution.csv"
+SOLUTION_DST = "Data/pipeline/routes-solution.csv"
 
 # Demands are scaled to integer tenths of a cbm (OR-Tools needs integers).
 DEMAND_SCALE = 10

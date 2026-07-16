@@ -17,10 +17,10 @@ import pandas as pd
 import requests
 from folium.plugins import PolyLineTextPath
 
-POINTS_INDEX_SRC = "Data/points-index.csv"
-SOLUTION_SRC = "Data/routes-solution.csv"
-SUMMARY_SRC = "Data/routes-solution-summary.csv"
-MAP_DST = "Data/mapa_rutasTEST.html"
+POINTS_INDEX_SRC = "Data/pipeline/points-index.csv"
+SOLUTION_SRC = "Data/pipeline/routes-solution.csv"
+SUMMARY_SRC = "Data/pipeline/routes-solution-summary.csv"
+MAP_DST = "Data/pipeline/mapa_rutas.html"
 
 OSRM_ROUTE_URL = "https://router.project-osrm.org/route/v1/driving/{coords}"
 REQUEST_DELAY_SECONDS = 1

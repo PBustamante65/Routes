@@ -6,9 +6,9 @@ stay comparable: same data, same cost definition, same output format.
 
 import pandas as pd
 
-POINTS_INDEX_SRC = "Data/points-index.csv"
-TIME_MATRIX_SRC = "Data/time-matrix-seconds.csv"
-DISTANCE_MATRIX_SRC = "Data/distance-matrix-meters.csv"
+POINTS_INDEX_SRC = "Data/pipeline/points-index.csv"
+TIME_MATRIX_SRC = "Data/pipeline/time-matrix-seconds.csv"
+DISTANCE_MATRIX_SRC = "Data/pipeline/distance-matrix-meters.csv"
 
 NUM_TRUCKS = 10
 TRUCK_CAPACITY_CBM = 8.0
