@@ -4,3 +4,4 @@ requests>=2.33
 pytest>=9.1
 ortools>=9.15
 folium>=0.20
+matplotlib>=3.11
