@@ -33,20 +33,24 @@ A second, class-based pipeline was added alongside the original flat scripts: `T
 
 This was built and merged via PRs [#8](../../pull/8) and [#9](../../pull/9) (both squashed into `main` as merge commits) after fixing a bug: submitting the same stop name twice via `add_points.py` produced two rows with the same generated id in `points-index.csv`, which made `points.set_index("id").loc[id]` in `visualize_routes.py` return a DataFrame instead of a Series — silently unpacking `lat, lon = ...` into the literal strings `"latitud"`/`"longitud"` instead of real coordinates, breaking both the OSRM request and the straight-line fallback. Fixed by having `TimeMatrixBuilder.load_points()` drop duplicate ids (keep-first), covered by `tests/test_time_matrix_pipeline.py`.
 
+## BI report (`Reports/`)
+`Reports/generate_bi_report.py` reads the CSV outputs already produced by the pipeline above (`Data/routes-solution-summary.csv`, `Data/routes-solution-ga-summary.csv`, `Data/routes-solution.csv`, `Data/points-index.csv`, `Data/ga-tuning-trials.csv`) and renders a 7-page PDF (`Reports/bi_report.pdf`) — it doesn't solve or fetch anything itself, so it's cheap to rerun after any solver/tuning change: cover + KPI tiles, OR-Tools vs. GA headline comparison, a per-truck OR-Tools route snapshot (straight-line/schematic, not street geometry — that's still `Data/mapa_rutas.html`), per-truck breakdown, the GA tuning sweep, a methodology/problem-setup appendix, and a recommendations page (mirrors this file's "Known gaps" section). Uses `matplotlib` (new dependency, see below).
+
 ## Testing
 - `pytest` (pinned `>=9.1` in `requirements.txt`) with 46 tests in `tests/`, covering `solve_routes`, `vrp_common`, `solve_ga`, `benchmark_solvers`, and the new pipeline's duplicate-id guard (`test_time_matrix_pipeline.py`). All passing.
 - This was the first test framework introduced in the repo (added alongside `build_time_matrix.py`, per `CLAUDE.md`'s instruction).
 - Note: this repo lives under iCloud Drive, and `pytest` runs here can take minutes (file-provider I/O on `.pytest_cache` and test fixtures), not seconds — a slow run is not a hang.
 
 ## Environment
-- `requirements.txt` pins `numpy>=2.4`, `pandas>=3.0`, `pytest>=9.1`, `ortools>=9.15`, `requests>=2.33`, `folium>=0.20`.
+- `requirements.txt` pins `numpy>=2.4`, `pandas>=3.0`, `pytest>=9.1`, `ortools>=9.15`, `requests>=2.33`, `folium>=0.20`, `matplotlib>=3.11`.
 - The user's anaconda base environment has other tools (TensorFlow, Streamlit, numba, scipy) that require `numpy<2`, so `requirements.txt` can't be installed there without breaking them.
 - A **project-local venv** (`.venv/`, gitignored) was created that installs exactly what `requirements.txt` specifies. All work in this repo (tests, solvers) should run through `.venv/bin/python`, not anaconda's Python.
 - `gh` (GitHub CLI) is now installed via Homebrew and authenticated as `PBustamante65`, for creating/merging PRs from the command line.
 
 ## Known gaps / discrepancies
 - **Fixed**: the flat `Code/visualize_routes.py` now overlays both solvers on the same map when `Data/routes-solution-ga.csv` exists -- OR-Tools solid lines, GA dashed, same per-truck color in both, plus a side-by-side comparison panel (trucks/dumps/distance/time) instead of the single-solver stats panel. Falls back to OR-Tools-only if the GA file is missing. The `Code/pipeline/` copy of `visualize_routes.py` is unchanged (still OR-Tools-only).
-- The GA has no construction heuristic or local search — it's a baseline implementation for comparison, not yet a competitive alternative.
+- The GA's tuned hyperparameters (`population_size`, `mutation_rate`, `tournament_k`, `nn_seed_fraction`, `two_opt_max_passes`, `elite_size`) are `solve()`'s defaults but still not exposed as CLI flags — re-tuning or A/B-testing them today means editing source, the same class of gap that caused the earlier CLI/default-drift bug.
+- Even tuned, the GA trails OR-Tools by ~4.3% distance / ~2.7% time on the 218-stop instance — a validated fallback, not yet a replacement.
 - `geodata.py`, `visualize.py`, `maptest.py` remain in `Code/` uncleaned; leftovers from early exploration.
 - **Fixed: the flat and `pipeline/` scripts used to collide on output filenames.** They previously both wrote `Data/points-index.csv` and `Data/routes-solution.csv`, so whichever pipeline ran most recently silently won. Fixed by giving `Code/pipeline/*` its own `Data/pipeline/` directory (own copy of `oxxo-stops.csv`, `points-index.csv`, both matrices, `routes-solution.csv` + summary, `mapa_rutas.html`); the flat scripts still read/write `Data/` directly. `Code/pipeline/add_points.py` still reads its base stop list from the top-level `Data/oxxo-stops.csv` (218 clean stores) and appends new stops into `Data/pipeline/oxxo-stops.csv` only.
 - Both pipelines have since been rerun end to end against the fixed paths: the flat scripts regenerated `Data/`'s genuine 218-store baseline (41h58m, 1185.4 km, 6 trucks, 28 landfill trips — matches the table above exactly), and `Code/pipeline/*` regenerated `Data/pipeline/`'s 219-store result (42h24m, 1204.5 km, 6 trucks, 28 landfill trips — matches the table above exactly). Each directory is now self-consistent and reflects its own pipeline only.
